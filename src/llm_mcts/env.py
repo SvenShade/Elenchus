@@ -381,7 +381,7 @@ class TwoPlayerConversationEnv:
             ],
             state_id=state.state_hash(),
             fallback=fallback,
-            max_tokens=self._json_max_tokens(768),
+            max_tokens=self._json_max_tokens(1536),
         )
         return normalize_rollout_reflection(data)
 

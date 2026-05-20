@@ -1738,15 +1738,28 @@ prompts:
     Rollout evidence:
     {{rollout_evidence}}
 
-    Return only valid JSON with keys:
+    Return one compact valid JSON object. Keep it terse enough to finish:
+    - summary: one or two sentences.
+    - interlocutor_hypotheses: at most 2 objects.
+    - projected_contradictions: at most 2 objects.
+    - branch_sensitivities: at most 3 short strings.
+    - promising_questions: at most 3 short strings.
+    - overreach_risks: at most 3 short strings.
+    - deferred_passages: at most 2 short strings or objects.
+    - refused_passages: at most 2 short strings or objects.
+    - factor_insights: at most 3 short strings.
+    - next_move_guidance: one short string, not an object.
+
+    Use exactly these top-level keys:
     summary, interlocutor_hypotheses, projected_contradictions,
     branch_sensitivities, promising_questions, overreach_risks,
     deferred_passages, refused_passages, factor_insights,
     next_move_guidance.
 
-    Each hypothesis or contradiction should include supporting action ids, node
-    ids, operators, or failure-family ids when available. Phrase everything as
-    provisional projection evidence, not as discovered truth about the user.
+    Each hypothesis or contradiction may include supporting action ids, node ids,
+    operators, or failure-family ids when available, but keep each object small.
+    Phrase everything as provisional projection evidence, not as discovered truth
+    about the user.
 
   finalize_p1_move: |
     Public task:

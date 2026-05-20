@@ -47,6 +47,30 @@ def test_chat_json_fallback_is_traced(tmp_path):
     assert any(event["prompt_name"] == "policy_prior.fallback" for event in events)
 
 
+def test_chat_json_fallback_salvages_partial_summary(tmp_path):
+    tracer = TraceWriter(run_dir=tmp_path / "run", enabled=True)
+    client = StubJSONClient(
+        [
+            '{"summary": "Useful reflection before truncation.", '
+            '"interlocutor_hypotheses": [{"hypothesis": "cut off"',
+            "still nope",
+        ],
+        tracer,
+    )
+
+    parsed = client.chat_json(
+        prompt_name="rollout_reflection",
+        messages=[{"role": "user", "content": "return json"}],
+        fallback={"summary": "fallback", "interlocutor_hypotheses": []},
+    )
+
+    assert parsed["summary"] == "Useful reflection before truncation."
+    lines = tracer.calls_path.read_text(encoding="utf-8").splitlines()
+    events = [json.loads(line) for line in lines]
+    fallback = next(event for event in events if event["prompt_name"] == "rollout_reflection.fallback")
+    assert fallback["parsed"]["summary"] == "Useful reflection before truncation."
+
+
 def test_chat_json_passes_max_tokens_to_initial_and_repair_calls(tmp_path):
     tracer = TraceWriter(run_dir=tmp_path / "run", enabled=True)
     client = StubJSONClient(["not json", '{"ok": true}'], tracer)

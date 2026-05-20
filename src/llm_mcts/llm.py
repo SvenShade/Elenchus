@@ -234,14 +234,40 @@ class LLMClient:
                 last_error = repair_error
 
         if fallback is not None:
+            parsed_fallback = _fallback_with_partial_json_fields(raw, fallback)
             if self.tracer:
                 self.tracer.record_call(
                     prompt_name=f"{prompt_name}.fallback",
                     messages=[],
                     raw_response=raw,
-                    parsed=fallback,
+                    parsed=parsed_fallback,
                     error=repr(last_error),
                     state_id=state_id,
                 )
-            return fallback
+            return parsed_fallback
         raise LLMJSONError(f"{prompt_name} failed to produce valid JSON: {last_error}") from last_error
+
+
+def _fallback_with_partial_json_fields(raw: str, fallback: Any) -> Any:
+    if not isinstance(fallback, dict):
+        return fallback
+    patched = dict(fallback)
+    for key in ("summary", "next_move_guidance", "rationale"):
+        if key not in patched:
+            continue
+        value = _extract_partial_json_string(raw, key)
+        if value:
+            patched[key] = value
+    return patched
+
+
+def _extract_partial_json_string(raw: str, key: str) -> str:
+    pattern = rf'"{re.escape(key)}"\s*:\s*"((?:\\.|[^"\\])*)"?'
+    match = re.search(pattern, raw, flags=re.DOTALL)
+    if not match:
+        return ""
+    text = match.group(1)
+    try:
+        return json.loads(f'"{text}"')
+    except json.JSONDecodeError:
+        return text.replace('\\"', '"').replace("\\n", "\n").strip()
