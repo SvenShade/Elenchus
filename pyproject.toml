@@ -1,0 +1,44 @@
+[project]
+name = "llm-mcts"
+version = "0.1.0"
+description = "MCTS-scaffolded two-player LLM conversation planner."
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "openai>=1.50.0",
+    "pydantic>=2.8.0",
+    "pyyaml>=6.0.2",
+    "rich>=13.7.0",
+    "tenacity>=8.5.0",
+    "typer>=0.12.5",
+]
+
+[project.optional-dependencies]
+dev = [
+    "fastapi>=0.115.0",
+    "httpx>=0.28.0",
+    "uvicorn[standard]>=0.32.0",
+    "pytest>=8.3.0",
+]
+web = [
+    "fastapi>=0.115.0",
+    "httpx>=0.28.0",
+    "uvicorn[standard]>=0.32.0",
+]
+local-llm = [
+    "hf-transfer>=0.1.9",
+    "setuptools>=70.0.0",
+    "transformers==4.51.3",
+    "vllm==0.8.5.post1",
+]
+
+[project.scripts]
+llm-mcts = "llm_mcts.cli:app"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"

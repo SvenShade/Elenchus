@@ -1,0 +1,496 @@
+# Copy this file when creating a new two-player MCTS conversation game.
+# It is intentionally runnable as-is: edit the profiles, action cards, prompts,
+# task, and MCTS defaults while preserving the same top-level schema.
+
+metadata:
+  name: Template Conversation Game
+  description: >
+    A runnable starter game showing the YAML interface for lifted-action,
+    two-player conversation planning.
+  max_real_turns: 6
+
+llm:
+  # Any OpenAI-compatible local endpoint should work, including vLLM.
+  base_url: http://localhost:8000/v1
+  api_key: local
+  model: local-model
+  temperature: 0.2
+  max_tokens: 512
+  timeout: 60.0
+  extra_body: {}
+  # Turn generation is natural transcript continuation. Structured decisions
+  # such as priors, judging, and reflection still use JSON chat prompts.
+  turn_transport: completion
+  turn_max_tokens: 96
+  turn_temperature: null
+
+players:
+  P1:
+    role: Strategic conversation planner
+    goals:
+      - Help the conversation make concrete progress.
+      - Preserve the other participant's agency and clarity.
+      - Convert vague uncertainty into testable next steps.
+    skills:
+      - Socratic questioning
+      - Assumption testing
+      - Evidence mapping
+      - Risk surfacing
+      - Concise synthesis
+    hierarchy: P1 chooses the next strategic move; P2 is an autonomous collaborator.
+    private_context:
+      design_notes: >
+        This is P1-only planning context. Put hidden strategy, domain knowledge,
+        safety constraints, or private memories here. Do not assume P2 can see it.
+      privacy_boundary: >
+        P1 planning and judging may use this context. P2 prompts should only see
+        the public task, public transcript, and whatever P2 profile you choose to expose.
+    communication_style: >
+      Direct, specific, and collaborative. Ask one useful question or make one
+      bounded proposal rather than giving a lecture.
+    beliefs_about_teammate:
+      likely_needs:
+        - Help turning ambiguity into an actionable distinction.
+        - Room to correct P1's frame.
+      uncertainty: >
+        P1 has only a provisional model of P2. Treat imagined P2 behavior as
+        projection evidence, not fact.
+
+  P2:
+    role: Collaborator or user in the conversation
+    goals:
+      - Express the relevant context honestly.
+      - Correct P1 when its frame is wrong.
+      - Reach a clearer shared next step.
+    skills:
+      - Domain knowledge about their own situation
+      - Preference expression
+      - Practical feedback
+    hierarchy: P2 is not controlled by P1.
+    private_context:
+      note: >
+        Keep this generic unless you intentionally want actual P2 LLM replies to
+        be conditioned on extra information. P1 rollout prompts should not receive
+        true hidden P2 private context.
+    communication_style: Plainspoken and willing to clarify when asked.
+    beliefs_about_teammate:
+      expectation: P1 is trying to help coordinate, not dominate.
+
+actions:
+  - id: clarify
+    description: Ask for the most decision-relevant missing detail.
+    allowed_players: [P1]
+    realization_guidance: Ask one concrete question that narrows uncertainty.
+    metadata:
+      objective: Reduce ambiguity.
+      target_types: [unclear_claim, missing_context, vague_preference]
+      diagnostic_operator: Ask what distinction would change the next move.
+      repair_operator: Convert the answer into a specific branch point.
+      dialogue_form: Single focused question.
+      agency_policy: Leave P2 free to reject the frame.
+      expected_user_signals: [adds_detail, corrects_frame, names_uncertainty]
+      safety_constraints: [do_not_interrogate, avoid_loaded_questions]
+
+  - id: surface_assumption
+    description: Identify a hidden premise and ask whether P2 endorses it.
+    allowed_players: [P1]
+    realization_guidance: Name the assumption tentatively and invite correction.
+    metadata:
+      objective: Make implicit reasoning inspectable.
+      target_types: [unstated_premise, hidden_constraint, inferred_priority]
+      diagnostic_operator: State the premise as a hypothesis.
+      repair_operator: Revise the shared frame based on P2's answer.
+      dialogue_form: Tentative mirror plus question.
+      agency_policy: Use "I may be reading this wrong" when appropriate.
+      expected_user_signals: [confirms_assumption, rejects_assumption, qualifies_assumption]
+      safety_constraints: [avoid_mindreading, keep_hypotheses_provisional]
+
+  - id: test_evidence
+    description: Ask what evidence would confirm or disconfirm the current view.
+    allowed_players: [P1]
+    realization_guidance: Turn a belief or plan into a concrete test.
+    metadata:
+      objective: Improve evidence balance.
+      target_types: [belief, plan, prediction, disagreement]
+      diagnostic_operator: Ask what observation would change the conclusion.
+      repair_operator: Define a lightweight check or falsifier.
+      dialogue_form: Evidence test.
+      agency_policy: Let P2 choose the evidential standard where possible.
+      expected_user_signals: [offers_evidence, names_falsifier, admits_unknown]
+      safety_constraints: [avoid_gotcha_framing, do_not_force_false_precision]
+
+  - id: surface_risk
+    description: Name the main downside of the apparent next move.
+    allowed_players: [P1]
+    realization_guidance: Point to one concrete risk and ask how to bound it.
+    metadata:
+      objective: Prevent premature commitment.
+      target_types: [risk, uncertainty, tradeoff, hidden_cost]
+      diagnostic_operator: Ask what could go wrong if the next step is taken.
+      repair_operator: Add a guardrail, fallback, or smaller trial.
+      dialogue_form: Risk check.
+      agency_policy: Frame risk as shared protection rather than objection.
+      expected_user_signals: [accepts_guardrail, downgrades_risk, names_new_risk]
+      safety_constraints: [avoid_alarmism, avoid_paralysis]
+
+  - id: offer_synthesis
+    description: Summarize the live shape of the conversation and propose the next small step.
+    allowed_players: [P1]
+    realization_guidance: Compress the exchange into one insight and one next action.
+    metadata:
+      objective: Convert scattered context into a shared path forward.
+      target_types: [summary, decision_point, next_step]
+      diagnostic_operator: Identify the strongest current interpretation.
+      repair_operator: Offer a reversible next move.
+      dialogue_form: Brief synthesis plus proposal.
+      agency_policy: Ask P2 to amend the synthesis.
+      expected_user_signals: [accepts_summary, edits_summary, chooses_next_step]
+      safety_constraints: [avoid_overclaiming, avoid_closing_too_early]
+
+  - id: invite_pushback
+    description: Explicitly invite P2 to challenge P1's frame.
+    allowed_players: [P1]
+    realization_guidance: Ask where P1's interpretation is most likely wrong.
+    metadata:
+      objective: Preserve epistemic humility and prevent frame lock-in.
+      target_types: [misread, disagreement, missing_perspective]
+      diagnostic_operator: Ask for the strongest correction.
+      repair_operator: Update the frame before proceeding.
+      dialogue_form: Correction invitation.
+      agency_policy: Give P2 status to disagree.
+      expected_user_signals: [corrects_p1, adds_context, endorses_frame]
+      safety_constraints: [do_not_make_dissent_costly, avoid_defensive_language]
+
+prompts:
+  state_analysis: |
+    Build a compact P1-private state sketch from the public transcript.
+    Treat this as planning scaffolding, not something P2 will see.
+
+    Public task:
+    {{task}}
+
+    Public transcript:
+    {{transcript}}
+
+    P1-visible profile:
+    {{p1_profile}}
+
+    P1's current model of P2:
+    {{p1_beliefs_about_p2}}
+
+    P1-private cognitive memory:
+    {{p1_cognitive_memory}}
+
+    Recent private rollout reflections:
+    {{p1_rollout_reflections}}
+
+    Legal action cards:
+    {{action_catalog}}
+
+    Return only valid JSON with keys:
+    belief_graph, discourse_state, claim_types, failure_hypotheses,
+    affective_state, safety_state, action_affordances.
+
+    Use this shape:
+    {
+      "belief_graph": {
+        "claims": [],
+        "reasons": [],
+        "evidence": [],
+        "definitions": [],
+        "values": [],
+        "decisions": [],
+        "memories": [],
+        "tensions": []
+      },
+      "discourse_state": {
+        "live_target": "",
+        "missing_information": [],
+        "conversation_phase": "opening"
+      },
+      "claim_types": [],
+      "failure_hypotheses": [],
+      "affective_state": {},
+      "safety_state": {},
+      "action_affordances": []
+    }
+
+  # Optional: define this prompt to generate per-state lifted candidates.
+  # With progressive_widening.enabled=false below, the planner expands all
+  # generated candidates instead of widening into them incrementally.
+  candidate_actions: |
+    Generate lifted action candidates from the legal action cards.
+
+    Node visits:
+    {{node_visits}}
+
+    Candidate limit:
+    {{candidate_limit}}
+
+    Public task:
+    {{task}}
+
+    Public transcript:
+    {{transcript}}
+
+    P1-private state sketch:
+    {{p1_state_analysis}}
+
+    Legal action cards:
+    {{action_catalog_full}}
+
+    Return only valid JSON:
+    {
+      "candidates": [
+        {
+          "base_action_id": "clarify",
+          "target_ids": [],
+          "failure_hypothesis_ids": [],
+          "diagnostic_operator": "ask_missing_detail",
+          "repair_operator": "make_next_step_specific",
+          "dialogue_form": "question",
+          "affect_strategy": "collaborative",
+          "directness": 0.4,
+          "abstraction": 0.3,
+          "agency_policy": "offers_optional_test",
+          "label_policy": "internal_only",
+          "prior": 0.0,
+          "compatibility_score": 0.0,
+          "safety_flags": [],
+          "expected_observations": ["P2 adds detail"]
+        }
+      ]
+    }
+
+  policy_prior: |
+    You are assigning priors over P1 strategic actions in a cooperative two-player conversation game.
+
+    Public task:
+    {{task}}
+
+    Public transcript:
+    {{transcript}}
+
+    P1-private state sketch:
+    {{p1_state_analysis}}
+
+    P1-private cognitive memory:
+    {{p1_cognitive_memory}}
+
+    P1-visible profile:
+    {{p1_profile}}
+
+    P1's current model of P2:
+    {{p1_beliefs_about_p2}}
+
+    Recent P1-private rollout reflections:
+    {{p1_rollout_reflections}}
+
+    Legal action cards:
+    {{action_catalog_full}}
+
+    Choose priors according to expected progress, information gain, safety, and fit to the transcript.
+    Return only valid JSON in this shape:
+    {
+      "priors": [
+        {"action_id": "clarify", "probability": 0.30}
+      ]
+    }
+    Include every legal action exactly once. Probabilities should sum to 1.
+
+  realize_p1_move: |
+    Public task:
+    {{task}}
+
+    Speaker notes available only to P1:
+    {{p1_profile_full}}
+
+    P1-private state sketch:
+    {{p1_state_analysis}}
+
+    P1's current model of P2:
+    {{p1_beliefs_about_p2}}
+
+    Recent P1-private rollout reflections:
+    {{p1_rollout_reflections}}
+
+    Selected strategic action card:
+    ACTION_ID: {{action_id}}
+    Description: {{action_description}}
+    Guidance: {{action_guidance}}
+    Metadata: {{action_metadata}}
+
+    Selected lifted candidate:
+    {{candidate_json}}
+
+    Convert the selected action into one natural conversational continuation.
+    Do not mention hidden action metadata, rollouts, simulations, priors, or private planning machinery.
+
+    Recorded conversation:
+    {{dialogue_transcript}}
+    P1:
+
+  imagine_p2_reply: |
+    Public task:
+    {{task}}
+
+    P2 profile:
+    {{p1_model_of_p2}}
+
+    Recorded conversation:
+    {{dialogue_transcript}}
+    P2:
+
+  judge_rollout_state: |
+    Judge the rollout state as a shared-utility outcome for the public task.
+    Treat imagined P2 behavior as projection evidence, not fact.
+
+    Public task:
+    {{task}}
+
+    Transcript:
+    {{transcript}}
+
+    P1-private state sketch:
+    {{p1_state_analysis}}
+
+    P1-private cognitive memory:
+    {{p1_cognitive_memory}}
+
+    Legal action cards visible to P1:
+    {{action_catalog}}
+
+    Score utility as epistemic/conversational progress constrained by agency and safety.
+    Penalize role confusion, repetition, generic language, premature closure, and mismatch between action and utterance.
+
+    Return only valid JSON with this shape:
+    {
+      "utility": 0.0,
+      "task_progress": 0.0,
+      "information_gain": 0.0,
+      "coordination_quality": 0.0,
+      "specificity": 0.0,
+      "user_agency_preserved": 0.0,
+      "risk": 0.0,
+      "conversational_cost": 0.0,
+      "repetition": 0.0,
+      "action_alignment": 0.0,
+      "rationale": "brief explanation"
+    }
+
+  actual_p2_reply: |
+    Public task:
+    {{task}}
+
+    Recorded conversation:
+    {{dialogue_transcript}}
+    P2:
+
+  rollout_reflection: |
+    Reflect over the MCTS rollout evidence before P1 speaks.
+    This is P1-private. Treat simulated P2 behavior as projection evidence, never as truth about the real P2.
+
+    Public task:
+    {{task}}
+
+    Public transcript:
+    {{transcript}}
+
+    P1-visible profile:
+    {{p1_profile}}
+
+    P1-private state sketch:
+    {{p1_state_analysis}}
+
+    P1-private cognitive memory:
+    {{p1_cognitive_memory}}
+
+    Rollout evidence:
+    {{rollout_evidence}}
+
+    Compare which action cards exposed useful signals, which routes looked brittle, which locked Doors might have mattered, and what final move should preserve agency.
+    Return only valid JSON:
+    {
+      "summary": "short synthesis",
+      "interlocutor_hypotheses": [],
+      "projected_contradictions": [],
+      "branch_sensitivities": [],
+      "promising_questions": [],
+      "overreach_risks": [],
+      "deferred_passages": [],
+      "refused_passages": [],
+      "factor_insights": [],
+      "next_move_guidance": "one sentence"
+    }
+
+  finalize_p1_move: |
+    Public task:
+    {{task}}
+
+    Real public transcript:
+    {{dialogue_transcript}}
+
+    P1-visible profile:
+    {{p1_profile_full}}
+
+    P1-private state sketch:
+    {{p1_state_analysis}}
+
+    Chosen strategic action:
+    ACTION_ID: {{action_id}}
+    Description: {{action_description}}
+    Guidance: {{action_guidance}}
+    Metadata: {{action_metadata}}
+
+    Chosen lifted candidate:
+    {{candidate_json}}
+
+    Original search utterance:
+    {{search_p1_utterance}}
+
+    P1-private rollout reflection:
+    {{rollout_reflection}}
+
+    Write the final real P1 continuation.
+    Do not mention rollouts, simulations, tree search, priors, private reflection, or hidden action metadata.
+    Use the reflection only to make the utterance more grounded, concise, and useful.
+
+    Recorded conversation:
+    {{dialogue_transcript}}
+    P1:
+
+  exploration_summary: |
+    Summarize the search evidence for a UI/debugging panel.
+
+    Evidence:
+    {{exploration_evidence}}
+
+    Return only valid JSON:
+    {
+      "summary": "short overview",
+      "themes": [],
+      "interesting_paths": [],
+      "potential_conflicts": []
+    }
+
+mcts:
+  simulations: 8
+  max_rollout_depth: 2
+  c_puct: 1.5
+  root_action_selection: visits
+  random_seed: 0
+  trace: true
+  progressive_widening:
+    enabled: false
+    k: 3.0
+    alpha: 0.5
+    initial_children: 4
+    expand_batch: 1
+    max_candidates: 40
+    candidate_refresh_visits: [0, 5, 20, 60]
+
+initial_state:
+  task: >
+    Help P2 clarify the situation, surface the most important uncertainty,
+    and choose a concrete next step while preserving P2's autonomy.
+  transcript: []
