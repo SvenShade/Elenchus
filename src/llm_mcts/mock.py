@@ -21,6 +21,7 @@ class DeterministicMockLLM:
         state_id: str | None = None,
         fallback: Any | None = None,
         max_repairs: int = 1,
+        max_tokens: int | None = None,
     ) -> Any:
         content = "\n".join(message.get("content", "") for message in messages)
         parsed = self._response(prompt_name, content, fallback)

@@ -12,8 +12,10 @@ class StubJSONClient(LLMClient):
     def __init__(self, outputs, tracer):
         self.outputs = list(outputs)
         self.tracer = tracer
+        self.chat_calls = []
 
     def chat(self, **kwargs):
+        self.chat_calls.append(kwargs)
         return self.outputs.pop(0)
 
 
@@ -43,6 +45,20 @@ def test_chat_json_fallback_is_traced(tmp_path):
     lines = tracer.calls_path.read_text(encoding="utf-8").splitlines()
     events = [json.loads(line) for line in lines]
     assert any(event["prompt_name"] == "policy_prior.fallback" for event in events)
+
+
+def test_chat_json_passes_max_tokens_to_initial_and_repair_calls(tmp_path):
+    tracer = TraceWriter(run_dir=tmp_path / "run", enabled=True)
+    client = StubJSONClient(["not json", '{"ok": true}'], tracer)
+
+    parsed = client.chat_json(
+        prompt_name="rollout_reflection",
+        messages=[{"role": "user", "content": "return json"}],
+        max_tokens=768,
+    )
+
+    assert parsed == {"ok": True}
+    assert [call["max_tokens"] for call in client.chat_calls] == [768, 768]
 
 
 class FakeUsage:

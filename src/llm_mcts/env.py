@@ -39,6 +39,7 @@ class JSONLLM(Protocol):
         state_id: str | None = None,
         fallback: Any | None = None,
         max_repairs: int = 1,
+        max_tokens: int | None = None,
     ) -> Any:
         ...
 
@@ -181,6 +182,7 @@ class TwoPlayerConversationEnv:
             ],
             state_id=state_hash,
             fallback=fallback,
+            max_tokens=self._json_max_tokens(512),
         )
         analysis = normalize_cognitive_state(data, state_id=state_hash)
         self._state_analysis_cache[state_hash] = analysis
@@ -245,6 +247,7 @@ class TwoPlayerConversationEnv:
             ],
             state_id=state_hash,
             fallback={"candidates": []},
+            max_tokens=self._json_max_tokens(1024),
         )
         candidates, rejections = normalize_lifted_candidates(
             data,
@@ -282,6 +285,7 @@ class TwoPlayerConversationEnv:
             ],
             state_id=state.state_hash(),
             fallback=fallback,
+            max_tokens=self._json_max_tokens(384),
         )
         return self._normalize_priors(data, legal)
 
@@ -377,6 +381,7 @@ class TwoPlayerConversationEnv:
             ],
             state_id=state.state_hash(),
             fallback=fallback,
+            max_tokens=self._json_max_tokens(768),
         )
         return normalize_rollout_reflection(data)
 
@@ -449,6 +454,7 @@ class TwoPlayerConversationEnv:
             ],
             state_id=state.state_hash(),
             fallback=fallback,
+            max_tokens=self._json_max_tokens(512),
         )
         if not isinstance(data, dict):
             data = fallback
@@ -646,6 +652,9 @@ class TwoPlayerConversationEnv:
         if stripped.endswith(f"{target_speaker}:"):
             return stripped + " "
         return prompt
+
+    def _json_max_tokens(self, minimum: int) -> int:
+        return max(int(self.config.llm.max_tokens), minimum)
 
 
 def _json(data: Any) -> str:

@@ -8,7 +8,7 @@ llm:
   api_key: local
   model: local-model
   temperature: 0.35
-  max_tokens: 128
+  max_tokens: 512
   timeout: 60
   turn_transport: completion
   turn_max_tokens: 96

@@ -175,8 +175,14 @@ class LLMClient:
         state_id: str | None = None,
         fallback: Any | None = None,
         max_repairs: int = 1,
+        max_tokens: int | None = None,
     ) -> Any:
-        raw = self.chat(prompt_name=prompt_name, messages=messages, state_id=state_id)
+        raw = self.chat(
+            prompt_name=prompt_name,
+            messages=messages,
+            state_id=state_id,
+            max_tokens=max_tokens,
+        )
         try:
             parsed = extract_json_object(raw)
             if self.tracer:
@@ -211,6 +217,7 @@ class LLMClient:
                 messages=repair_messages,
                 state_id=state_id,
                 temperature=0.0,
+                max_tokens=max_tokens,
             )
             try:
                 parsed = extract_json_object(repaired)
