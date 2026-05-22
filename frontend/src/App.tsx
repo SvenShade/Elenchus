@@ -22,6 +22,7 @@ export function App() {
   const [labyrinthDepth, setLabyrinthDepth] = useState(2);
   const [lanternRange, setLanternRange] = useState(1);
   const [graphDetail, setGraphDetail] = useState(100);
+  const [visualisation, setVisualisation] = useState<"labyrinth" | "constellation">("labyrinth");
   const [reflexion, setReflexion] = useState(false);
   const [p2Draft, setP2Draft] = useState("");
   const [selectedNodeId, setSelectedNodeId] = useState<number | null>(null);
@@ -211,6 +212,26 @@ export function App() {
                   />
                   <strong>{graphDetail}%</strong>
                 </label>
+                <div className="segmented-control visualisation-control">
+                  <span>Visualisation</span>
+                  <div role="group" aria-label="Visualisation">
+                    <button
+                      type="button"
+                      className={visualisation === "labyrinth" ? "active" : ""}
+                      onClick={() => setVisualisation("labyrinth")}
+                    >
+                      Labyrinth
+                    </button>
+                    <button
+                      type="button"
+                      className={visualisation === "constellation" ? "active" : ""}
+                      onClick={() => setVisualisation("constellation")}
+                    >
+                      Constellation
+                    </button>
+                  </div>
+                  <strong>{visualisation === "labyrinth" ? "map" : "3D"}</strong>
+                </div>
                 <label className={`toggle-control ${reflexionControl.available ? "" : "disabled"}`}>
                   <span>Reflexion</span>
                   <input
@@ -272,6 +293,7 @@ export function App() {
           chosenNodeId={state.chosenNodeId}
           chosenPath={state.chosenPath}
           graphDetail={graphDetail}
+          visualisation={visualisation}
           planning={state.planning}
           explorationSummary={state.explorationSummary}
           rolloutReflection={state.rolloutReflection}

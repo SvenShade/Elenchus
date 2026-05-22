@@ -1,6 +1,6 @@
 metadata:
-  name: Elenchus, Lantern of Latent Labyrinths v0.1
-  description: A golem of dialectic self-exploration
+  name: Elenchus, the Mirror V0.1
+  description: A golem of dialectic self-exploration.
   max_real_turns: 8
 
 llm:

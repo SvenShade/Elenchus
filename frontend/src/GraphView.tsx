@@ -33,6 +33,7 @@ import {
   visitHeatForNode,
   valueLabel
 } from "./graphMetrics";
+import { LabyrinthView } from "./LabyrinthView";
 import {
   buildAntechamber,
   buildPrismRows,
@@ -63,6 +64,7 @@ type GraphViewProps = {
   chosenNodeId: number | null;
   chosenPath: number[];
   graphDetail: number;
+  visualisation: "labyrinth" | "constellation";
   planning: boolean;
   explorationSummary: ExplorationSummary | null;
   rolloutReflection: RolloutReflection | null;
@@ -86,6 +88,7 @@ export function GraphView({
   chosenNodeId,
   chosenPath,
   graphDetail,
+  visualisation,
   planning,
   explorationSummary,
   rolloutReflection,
@@ -204,93 +207,121 @@ export function GraphView({
         <div className="graph-status">
           <span>{visible.nodes.length}/{nodes.length} chambers</span>
           <span>{visible.edges.length}/{edges.length} passages</span>
-          <span>{graphDetail}% detail</span>
+          <span>{graphDetail}% map detail</span>
+          <span>{visualisation === "labyrinth" ? "Labyrinth" : "Constellation"}</span>
         </div>
-        <Canvas camera={{ position: [0, 0, 34], fov: 48 }} dpr={[1, 2]}>
-          <color attach="background" args={["#09070b"]} />
-          <ambientLight intensity={0.78} />
-          <directionalLight position={[10, 12, 8]} intensity={1.55} />
-          <OrbitControls
-            enableDamping
-            makeDefault
-            autoRotate={planning || rootOrbiting || singularityActive}
-            autoRotateSpeed={singularityActive ? 4.2 : 0.22}
-            onStart={() => {
-              setRootOrbiting(false);
-              setCameraInterruptSignal((signal) => signal + 1);
-            }}
-          />
-          <AnimatedCamera
-            nodes={layout.nodes}
-            nodeMap={layout.nodeMap}
+        {visualisation === "labyrinth" ? (
+          <LabyrinthView
+            nodes={visible.nodes}
+            edges={visible.edges}
             selectedNodeId={selectedNodeId}
+            selectedBranchNodeIds={selectedBranchNodeIds}
+            selectedBranchEdgeIds={selectedBranchEdgeIds}
+            mctsChosenEdgeIds={mctsChosenEdgeIds}
+            labelDistances={labelDistances}
+            rootVisits={rootVisits}
             planning={planning}
             singularityActive={singularityActive}
-            rootOrbiting={rootOrbiting}
             resetSignal={cameraResetSignal}
-            interruptSignal={cameraInterruptSignal}
+            rootOrbiting={rootOrbiting}
+            birthGlowNodeIds={birthGlowNodeIds}
+            visualEffects={visualEffects}
+            selectedGhostDoors={selectedGhostDoors}
+            selectedCandidateId={selectedCandidateId}
+            onSelectNode={(nodeId) => {
+              setRootOrbiting(false);
+              onSelectNode(nodeId);
+            }}
+            onSelectCandidate={onSelectCandidate}
+            onManualInteraction={() => setRootOrbiting(false)}
           />
-          <group>
-            {layout.edges.map((edge) => {
-              const source = layout.nodeMap.get(edge.source);
-              const target = layout.nodeMap.get(edge.target);
-              if (!source || !target) return null;
-              return (
-                <EdgeLine
-                  key={edge.id}
-                  source={source}
-                  target={target}
-                  traversalActive={edge.active}
-                  selectedBranchActive={isEdgeInBranch(edge, selectedBranchEdgeIds)}
-                  mctsChosenActive={isEdgeInBranch(edge, mctsChosenEdgeIds)}
-                  heat={edgeHeatForVisits(target.visits, rootVisits)}
-                />
-              );
-            })}
-            <EffectLayer
-              effects={visualEffects}
-              nodeMap={layout.nodeMap}
-              edgeMap={layout.edgeMap}
+        ) : (
+          <Canvas camera={{ position: [0, 0, 34], fov: 48 }} dpr={[1, 2]}>
+            <color attach="background" args={["#09070b"]} />
+            <ambientLight intensity={0.78} />
+            <directionalLight position={[10, 12, 8]} intensity={1.55} />
+            <OrbitControls
+              enableDamping
+              makeDefault
+              autoRotate={planning || rootOrbiting || singularityActive}
+              autoRotateSpeed={singularityActive ? 4.2 : 0.22}
+              onStart={() => {
+                setRootOrbiting(false);
+                setCameraInterruptSignal((signal) => signal + 1);
+              }}
             />
-            {layout.nodes.map((node) => (
-              <GraphSphere
-                key={node.id}
-                node={node}
-                selected={node.id === selectedNodeId}
-                hovered={node.id === hoveredNode}
-                inSelectedBranch={selectedBranchNodeIds.has(node.id)}
-                birthGlowing={birthGlowNodeIds.has(node.id)}
-                visitHeat={visitHeatForNode(node, rootVisits)}
-                labelOpacity={labelOpacityForDistance(
-                  selectedNodeId === null ? null : labelDistances.get(node.id) ?? Number.POSITIVE_INFINITY
-                )}
-                spawnPosition={spawnPositionForNode(node, layout.nodeMap)}
-                onPointerOver={() => setHoveredNode(node.id)}
-                onPointerOut={() => setHoveredNode(null)}
-                onClick={() => {
-                  setRootOrbiting(false);
-                  onSelectNode(node.id);
-                }}
+            <AnimatedCamera
+              nodes={layout.nodes}
+              nodeMap={layout.nodeMap}
+              selectedNodeId={selectedNodeId}
+              planning={planning}
+              singularityActive={singularityActive}
+              rootOrbiting={rootOrbiting}
+              resetSignal={cameraResetSignal}
+              interruptSignal={cameraInterruptSignal}
+            />
+            <group>
+              {layout.edges.map((edge) => {
+                const source = layout.nodeMap.get(edge.source);
+                const target = layout.nodeMap.get(edge.target);
+                if (!source || !target) return null;
+                return (
+                  <EdgeLine
+                    key={edge.id}
+                    source={source}
+                    target={target}
+                    traversalActive={edge.active}
+                    selectedBranchActive={isEdgeInBranch(edge, selectedBranchEdgeIds)}
+                    mctsChosenActive={isEdgeInBranch(edge, mctsChosenEdgeIds)}
+                    heat={edgeHeatForVisits(target.visits, rootVisits)}
+                  />
+                );
+              })}
+              <EffectLayer
+                effects={visualEffects}
+                nodeMap={layout.nodeMap}
+                edgeMap={layout.edgeMap}
               />
-            ))}
-            {selected && (
-              <GhostDoorLayer
-                parent={layout.nodeMap.get(selected.id) ?? null}
-                candidates={selectedGhostDoors}
-                selectedCandidateId={selectedCandidateId}
-                onSelectCandidate={onSelectCandidate}
+              {layout.nodes.map((node) => (
+                <GraphSphere
+                  key={node.id}
+                  node={node}
+                  selected={node.id === selectedNodeId}
+                  hovered={node.id === hoveredNode}
+                  inSelectedBranch={selectedBranchNodeIds.has(node.id)}
+                  birthGlowing={birthGlowNodeIds.has(node.id)}
+                  visitHeat={visitHeatForNode(node, rootVisits)}
+                  labelOpacity={labelOpacityForDistance(
+                    selectedNodeId === null ? null : labelDistances.get(node.id) ?? Number.POSITIVE_INFINITY
+                  )}
+                  spawnPosition={spawnPositionForNode(node, layout.nodeMap)}
+                  onPointerOver={() => setHoveredNode(node.id)}
+                  onPointerOut={() => setHoveredNode(null)}
+                  onClick={() => {
+                    setRootOrbiting(false);
+                    onSelectNode(node.id);
+                  }}
+                />
+              ))}
+              {selected && (
+                <GhostDoorLayer
+                  parent={layout.nodeMap.get(selected.id) ?? null}
+                  candidates={selectedGhostDoors}
+                  selectedCandidateId={selectedCandidateId}
+                  onSelectCandidate={onSelectCandidate}
+                />
+              )}
+            </group>
+            {singularity && singularityLayout && singularityActive && (
+              <SingularitySnapshot
+                singularity={singularity}
+                nodes={singularityLayout.nodes}
+                edges={singularityLayout.edges}
+                nodeMap={singularityLayout.nodeMap}
               />
             )}
-          </group>
-          {singularity && singularityLayout && singularityActive && (
-            <SingularitySnapshot
-              singularity={singularity}
-              nodes={singularityLayout.nodes}
-              edges={singularityLayout.edges}
-              nodeMap={singularityLayout.nodeMap}
-            />
-          )}
-        </Canvas>
+          </Canvas>
+        )}
         <button
           className="viewport-recenter-button"
           type="button"

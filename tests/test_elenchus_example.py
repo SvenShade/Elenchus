@@ -36,7 +36,7 @@ class RecordingTurnLLM:
 def test_elenchus_example_loads_with_expected_shape():
     config = GameConfig.load(ELENCHUS_GAME)
 
-    assert config.metadata.name == "Elenchus, Lantern of Latent Labyrinths v0.1"
+    assert config.metadata.name == "Elenchus, the Mirror V0.1"
     assert config.metadata.max_real_turns == 8
     assert config.initial_state.transcript == []
     assert config.mcts.simulations == 12
