@@ -230,7 +230,6 @@ export function App() {
                       Constellation
                     </button>
                   </div>
-                  <strong>{visualisation === "labyrinth" ? "map" : "3D"}</strong>
                 </div>
                 <div className={`segmented-control reflexion-control ${reflexionControl.available ? "" : "disabled"}`}>
                   <span>Reflexion</span>
@@ -252,7 +251,6 @@ export function App() {
                       On
                     </button>
                   </div>
-                  <strong>{reflexionControl.available ? (reflexion ? "on" : "off") : "n/a"}</strong>
                 </div>
               </div>
             </div>
