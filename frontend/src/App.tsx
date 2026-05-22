@@ -232,17 +232,28 @@ export function App() {
                   </div>
                   <strong>{visualisation === "labyrinth" ? "map" : "3D"}</strong>
                 </div>
-                <label className={`toggle-control ${reflexionControl.available ? "" : "disabled"}`}>
+                <div className={`segmented-control reflexion-control ${reflexionControl.available ? "" : "disabled"}`}>
                   <span>Reflexion</span>
-                  <input
-                    aria-label="Reflexion"
-                    type="checkbox"
-                    checked={reflexion && reflexionControl.available}
-                    disabled={!reflexionControl.available || state.planning}
-                    onChange={(event) => setReflexion(event.target.checked)}
-                  />
+                  <div role="group" aria-label="Reflexion">
+                    <button
+                      type="button"
+                      className={!reflexion ? "active" : ""}
+                      disabled={!reflexionControl.available || state.planning}
+                      onClick={() => setReflexion(false)}
+                    >
+                      Off
+                    </button>
+                    <button
+                      type="button"
+                      className={reflexion && reflexionControl.available ? "active" : ""}
+                      disabled={!reflexionControl.available || state.planning}
+                      onClick={() => setReflexion(true)}
+                    >
+                      On
+                    </button>
+                  </div>
                   <strong>{reflexionControl.available ? (reflexion ? "on" : "off") : "n/a"}</strong>
-                </label>
+                </div>
               </div>
             </div>
           </details>
