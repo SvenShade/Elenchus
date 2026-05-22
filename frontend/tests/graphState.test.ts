@@ -55,18 +55,26 @@ describe("graphReducer", () => {
       depth: 1
     });
     const state = graphReducer(withChild, {
+      type: "edge_traversed",
+      parent_id: 0,
+      node_id: 7
+    });
+    expect(state.edges["0->7"].active).toBe(true);
+
+    const finished = graphReducer(state, {
       type: "planning_finished",
       chosen_action_id: "clarify",
       chosen_node_id: 7,
       chosen_path: [0, 7],
       root_stats: []
     });
-    const updated = graphReducer(state, {
+    const updated = graphReducer(finished, {
       type: "transcript_updated",
       transcript: [{ speaker: "P1", content: "Can you clarify?", action_id: "clarify" }]
     });
 
     expect(updated.planning).toBe(false);
+    expect(updated.edges["0->7"].active).toBe(false);
     expect(updated.chosenActionId).toBe("clarify");
     expect(updated.chosenNodeId).toBe(7);
     expect(updated.chosenPath).toEqual([0, 7]);

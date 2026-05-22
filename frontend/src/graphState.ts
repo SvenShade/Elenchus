@@ -684,6 +684,7 @@ export function graphReducer(state: GraphState, event: MCTSEvent): GraphState {
       return {
         ...state,
         planning: false,
+        edges: clearActiveEdges(state.edges),
         chosenActionId: event.chosen_action_id ?? state.chosenActionId,
         chosenNodeId: chosenNodeIdFromEvent(event, state.nodes),
         chosenPath: chosenPathFromEvent(event, state.nodes),
@@ -695,6 +696,7 @@ export function graphReducer(state: GraphState, event: MCTSEvent): GraphState {
       return {
         ...state,
         planning: false,
+        edges: clearActiveEdges(state.edges),
         chosenActionId: event.chosen_action_id ?? state.chosenActionId,
         chosenNodeId: chosenNodeIdFromEvent(event, state.nodes),
         chosenPath: chosenPathFromEvent(event, state.nodes),
@@ -850,6 +852,12 @@ function addEvaluationToNode(
 function markActiveEdge(edges: Record<string, GraphEdge>, edge: string) {
   return Object.fromEntries(
     Object.entries(edges).map(([id, value]) => [id, { ...value, active: id === edge }])
+  );
+}
+
+function clearActiveEdges(edges: Record<string, GraphEdge>) {
+  return Object.fromEntries(
+    Object.entries(edges).map(([id, value]) => [id, value.active ? { ...value, active: false } : value])
   );
 }
 

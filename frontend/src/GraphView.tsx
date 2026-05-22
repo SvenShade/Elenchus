@@ -268,12 +268,12 @@ export function GraphView({
                 return (
                   <EdgeLine
                     key={edge.id}
-                    source={source}
-                    target={target}
-                    traversalActive={edge.active}
-                    selectedBranchActive={isEdgeInBranch(edge, selectedBranchEdgeIds)}
-                    mctsChosenActive={isEdgeInBranch(edge, mctsChosenEdgeIds)}
-                    heat={edgeHeatForVisits(target.visits, rootVisits)}
+                  source={source}
+                  target={target}
+                  traversalActive={planning && edge.active}
+                  selectedBranchActive={isEdgeInBranch(edge, selectedBranchEdgeIds)}
+                  mctsChosenActive={isEdgeInBranch(edge, mctsChosenEdgeIds)}
+                  heat={edgeHeatForVisits(target.visits, rootVisits)}
                   />
                 );
               })}
@@ -434,9 +434,24 @@ function GraphSphere({
         </mesh>
       </group>
       <mesh
-        onPointerOver={onPointerOver}
-        onPointerOut={onPointerOut}
-        onClick={onClick}
+        onPointerOver={(event) => {
+          event.stopPropagation();
+          onPointerOver();
+        }}
+        onPointerOut={(event) => {
+          event.stopPropagation();
+          onPointerOut();
+        }}
+        onClick={(event) => {
+          event.stopPropagation();
+          onClick();
+        }}
+      >
+        <sphereGeometry args={[Math.max(radius * 1.85, 0.9), 24, 16]} />
+        <meshBasicMaterial transparent opacity={0} depthWrite={false} />
+      </mesh>
+      <mesh
+        raycast={() => null}
         castShadow
       >
         <sphereGeometry args={[radius, 32, 24]} />
