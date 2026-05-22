@@ -133,7 +133,8 @@ A game YAML defines:
 - `actions`: lifted strategic action cards.
 - `prompts`: priors, state analysis, candidate generation, turn continuation,
   rollout judgement, Cartography, finalization, and actual P2 replies.
-- `mcts`: simulation budget, rollout depth, PUCT, progressive widening.
+- `mcts`: simulation budget, Labyrinth/tree depth, Lantern/rollout range, PUCT,
+  progressive widening.
 - `initial_state`: task and optional starting transcript.
 
 Elenchus uses natural transcript continuations for P1/P2 utterance generation
@@ -194,4 +195,3 @@ Planner runs write research artifacts under `runs/<timestamp>/`:
   evaluations, root stats, chosen action, and reflection.
 
 `runs/` is intentionally ignored by git.
-

@@ -66,6 +66,8 @@ def test_mocked_plan_appends_p1_and_websocket_receives_events(tmp_path):
 
     initial_summary = client.get(f"/api/sessions/{session_id}").json()
     assert initial_summary["depth_slider"] == {"min": 1, "max": 5, "default": 1}
+    assert initial_summary["labyrinth_depth_slider"] == {"min": 1, "max": 5, "default": 1}
+    assert initial_summary["lantern_range_slider"] == {"min": 0, "max": 5, "default": 1}
 
     response = client.post(
         f"/api/sessions/{session_id}/plan",
@@ -93,12 +95,48 @@ def test_mocked_plan_appends_p1_and_websocket_receives_events(tmp_path):
     session = client.app.state.sessions.get(session_id)
     run_started = next(event for event in session.event_log if event["type"] == "run_started")
     assert run_started["max_rollout_depth"] == 3
+    assert run_started["labyrinth_depth"] == 3
+    assert run_started["lantern_range"] == 0
+    assert run_started["depth_mode"] == "legacy_absolute"
     assert seen.index("plan_completed") < seen.index("exploration_summary")
     assert seen.index("exploration_summary") < seen.index("planning_finished")
     summary_event = next(event for event in session.event_log if event["type"] == "exploration_summary")
     assert "clarifying uncertainty" in summary_event["summary"]
     assert summary_event["themes"]
     assert summary["transcript"][-1]["speaker"] == "P1"
+
+
+def test_web_plan_accepts_split_depth_controls(tmp_path):
+    client = make_client(tmp_path)
+    session_id = client.post("/api/sessions").json()["session_id"]
+
+    response = client.post(
+        f"/api/sessions/{session_id}/plan",
+        json={"simulations": 2, "labyrinth_depth": 1, "lantern_range": 2},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["depth_mode"] == "split"
+    assert payload["labyrinth_depth"] == 1
+    assert payload["lantern_range"] == 2
+    assert payload["max_rollout_depth"] == 3
+
+    deadline = time.monotonic() + 5
+    summary = client.get(f"/api/sessions/{session_id}").json()
+    while summary["planning"] and time.monotonic() < deadline:
+        time.sleep(0.05)
+        summary = client.get(f"/api/sessions/{session_id}").json()
+
+    session = client.app.state.sessions.get(session_id)
+    run_started = next(event for event in session.event_log if event["type"] == "run_started")
+    node_depths = [event["depth"] for event in session.event_log if event["type"] == "node_added"]
+    rollout_depths = [event["depth"] for event in session.event_log if event["type"] == "rollout_step"]
+    assert run_started["depth_mode"] == "split"
+    assert run_started["labyrinth_depth"] == 1
+    assert run_started["lantern_range"] == 2
+    assert max(node_depths) == 1
+    assert max(rollout_depths) == 3
 
 
 def test_reflection_plan_events_and_memory_are_used_by_web_session(tmp_path):

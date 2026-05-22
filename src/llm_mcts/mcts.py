@@ -68,6 +68,23 @@ class MCTSNode:
         return self.value_sum / self.visits
 
 
+@dataclass(frozen=True)
+class SearchDepths:
+    labyrinth_depth: int
+    lantern_range: int
+    max_rollout_depth: int
+    legacy_absolute: bool
+
+    @property
+    def depth_mode(self) -> str:
+        return "legacy_absolute" if self.legacy_absolute else "split"
+
+    def rollout_steps_from_leaf(self, leaf_depth: int) -> int:
+        if self.legacy_absolute:
+            return max(0, self.max_rollout_depth - leaf_depth)
+        return self.lantern_range
+
+
 class MCTSPlanner:
     def __init__(
         self,
@@ -88,6 +105,10 @@ class MCTSPlanner:
         state: ConversationState,
         simulations: int | None = None,
         max_rollout_depth: int | None = None,
+        max_tree_depth: int | None = None,
+        rollout_extension_depth: int | None = None,
+        labyrinth_depth: int | None = None,
+        lantern_range: int | None = None,
         observer: MCTSObserver | None = None,
         finalize: bool = True,
         cancel_event: threading.Event | None = None,
@@ -97,17 +118,22 @@ class MCTSPlanner:
         self._cancel_event = cancel_event
         simulation_count = simulations if simulations is not None else self.config.simulations
         simulation_count = max(1, int(simulation_count))
-        rollout_depth = (
-            max(1, int(max_rollout_depth))
-            if max_rollout_depth is not None
-            else self.config.max_rollout_depth
+        depths = self._resolve_depths(
+            max_rollout_depth=max_rollout_depth,
+            max_tree_depth=max_tree_depth,
+            rollout_extension_depth=rollout_extension_depth,
+            labyrinth_depth=labyrinth_depth,
+            lantern_range=lantern_range,
         )
         root = self._new_node(state.copy(), parent_id=None, depth=0, prior=1.0)
         self._emit(
             "run_started",
             root_id=root.id,
             simulations=simulation_count,
-            max_rollout_depth=rollout_depth,
+            max_rollout_depth=depths.max_rollout_depth,
+            labyrinth_depth=depths.labyrinth_depth,
+            lantern_range=depths.lantern_range,
+            depth_mode=depths.depth_mode,
             state=root.state.model_dump(),
         )
         self._emit("node_added", **self._event_node(root))
@@ -115,7 +141,7 @@ class MCTSPlanner:
         try:
             for simulation_index in range(simulation_count):
                 self._check_cancelled()
-                path, leaf = self._select_and_expand(root, rollout_depth)
+                path, leaf = self._select_and_expand(root, depths.labyrinth_depth)
                 self._check_cancelled()
                 self._emit(
                     "node_selected",
@@ -123,10 +149,11 @@ class MCTSPlanner:
                     node_id=leaf.id,
                     path=[node.id for node in path],
                 )
+                rollout_extension = depths.rollout_steps_from_leaf(leaf.depth)
                 rollout_state, rollout_trace = self._rollout_from(
                     leaf.state,
                     leaf.depth,
-                    rollout_depth=rollout_depth,
+                    rollout_extension_depth=rollout_extension,
                     simulation_index=simulation_index + 1,
                 )
                 self._check_cancelled()
@@ -142,6 +169,8 @@ class MCTSPlanner:
                     "node_evaluated",
                     simulation=simulation_index + 1,
                     node_id=leaf.id,
+                    leaf_depth=leaf.depth,
+                    rollout_extension_depth=rollout_extension,
                     utility=judge.utility,
                     rubric=judge.rubric,
                     rollout_trace=rollout_trace,
@@ -180,7 +209,7 @@ class MCTSPlanner:
                 search_utterance,
                 root_stats,
                 simulation_count,
-                rollout_depth,
+                depths,
             )
             final_utterance = (
                 self._finalize_p1_move(
@@ -201,7 +230,7 @@ class MCTSPlanner:
                         root,
                         chosen_action_id,
                         simulation_count,
-                        rollout_depth,
+                        depths,
                         search_utterance=search_utterance,
                         final_utterance=final_utterance,
                         rollout_reflection=rollout_reflection,
@@ -238,6 +267,10 @@ class MCTSPlanner:
                 estimated_utility=result.estimated_utility,
                 root_stats=result.root_stats,
                 rollout_reflection=result.rollout_reflection,
+                max_rollout_depth=depths.max_rollout_depth,
+                labyrinth_depth=depths.labyrinth_depth,
+                lantern_range=depths.lantern_range,
+                depth_mode=depths.depth_mode,
                 trace_dir=str(result.trace_dir) if result.trace_dir else None,
             )
             return result
@@ -250,14 +283,72 @@ class MCTSPlanner:
             self._observer = None
             self._cancel_event = None
 
+    def _resolve_depths(
+        self,
+        *,
+        max_rollout_depth: int | None,
+        max_tree_depth: int | None,
+        rollout_extension_depth: int | None,
+        labyrinth_depth: int | None,
+        lantern_range: int | None,
+    ) -> SearchDepths:
+        if labyrinth_depth is not None:
+            max_tree_depth = labyrinth_depth
+        if lantern_range is not None:
+            rollout_extension_depth = lantern_range
+
+        split_requested = (
+            max_tree_depth is not None
+            or rollout_extension_depth is not None
+            or self.config.max_tree_depth is not None
+            or self.config.rollout_extension_depth is not None
+        )
+        if not split_requested:
+            absolute_depth = (
+                max(1, int(max_rollout_depth))
+                if max_rollout_depth is not None
+                else self.config.max_rollout_depth
+            )
+            return SearchDepths(
+                labyrinth_depth=absolute_depth,
+                lantern_range=0,
+                max_rollout_depth=absolute_depth,
+                legacy_absolute=True,
+            )
+
+        tree_depth = (
+            max_tree_depth
+            if max_tree_depth is not None
+            else self.config.max_tree_depth
+            if self.config.max_tree_depth is not None
+            else max_rollout_depth
+            if max_rollout_depth is not None
+            else self.config.max_rollout_depth
+        )
+        extension_depth = (
+            rollout_extension_depth
+            if rollout_extension_depth is not None
+            else self.config.rollout_extension_depth
+            if self.config.rollout_extension_depth is not None
+            else 1
+        )
+        tree_depth = max(1, int(tree_depth))
+        extension_depth = max(0, int(extension_depth))
+        return SearchDepths(
+            labyrinth_depth=tree_depth,
+            lantern_range=extension_depth,
+            max_rollout_depth=tree_depth + extension_depth,
+            legacy_absolute=False,
+        )
+
     def _select_and_expand(
         self,
         root: MCTSNode,
-        rollout_depth: int,
+        labyrinth_depth: int,
     ) -> tuple[list[MCTSNode], MCTSNode]:
         node = root
         path = [node]
-        while node.depth < rollout_depth:
+        while node.depth < labyrinth_depth:
             self._check_cancelled()
             if self._should_expand_or_widen(node):
                 self._expand_or_widen(node)
@@ -448,13 +539,13 @@ class MCTSPlanner:
         self,
         state: ConversationState,
         depth: int,
-        rollout_depth: int,
+        rollout_extension_depth: int,
         simulation_index: int,
     ) -> tuple[ConversationState, list[dict[str, Any]]]:
         rollout_state = state.copy()
         rollout_trace: list[dict[str, Any]] = []
-        current_depth = depth
-        while current_depth < rollout_depth:
+        rollout_offset = 0
+        while rollout_offset < rollout_extension_depth and not rollout_state.terminal:
             self._check_cancelled()
             candidate = self._rollout_action(rollout_state)
             self._check_cancelled()
@@ -463,21 +554,25 @@ class MCTSPlanner:
                 candidate,
                 imagined=True,
             )
+            rollout_offset += 1
+            absolute_depth = depth + rollout_offset
             rollout_trace.append(
                 {
-                "depth": current_depth + 1,
-                "action_id": candidate.base_action_id,
-                "candidate_id": candidate.candidate_id,
-                "candidate": candidate.to_prompt_dict(),
-                "action_metadata": candidate.action_metadata,
-                "p1_utterance": p1_utterance,
-                "p2_reply": p2_reply,
+                    "depth": absolute_depth,
+                    "rollout_offset": rollout_offset,
+                    "action_id": candidate.base_action_id,
+                    "candidate_id": candidate.candidate_id,
+                    "candidate": candidate.to_prompt_dict(),
+                    "action_metadata": candidate.action_metadata,
+                    "p1_utterance": p1_utterance,
+                    "p2_reply": p2_reply,
                 }
             )
             self._emit(
                 "rollout_step",
                 simulation=simulation_index,
-                depth=current_depth + 1,
+                depth=absolute_depth,
+                rollout_offset=rollout_offset,
                 action_id=candidate.base_action_id,
                 candidate_id=candidate.candidate_id,
                 candidate=candidate.to_prompt_dict(),
@@ -486,7 +581,6 @@ class MCTSPlanner:
                 p2_reply=p2_reply,
                 state_id=rollout_state.state_hash(),
             )
-            current_depth += 1
         return rollout_state, rollout_trace
 
     def _rollout_action(self, state: ConversationState) -> LiftedActionCandidate:
@@ -555,7 +649,7 @@ class MCTSPlanner:
         search_utterance: str,
         root_stats: list[dict[str, Any]],
         simulation_count: int,
-        rollout_depth: int,
+        depths: SearchDepths,
     ) -> dict[str, Any] | None:
         if not self.env.config.prompts.rollout_reflection:
             return None
@@ -565,7 +659,7 @@ class MCTSPlanner:
             search_utterance,
             root_stats,
             simulation_count,
-            rollout_depth,
+            depths,
         )
         self._emit(
             "rollout_reflection_started",
@@ -622,7 +716,7 @@ class MCTSPlanner:
         search_utterance: str,
         root_stats: list[dict[str, Any]],
         simulation_count: int,
-        rollout_depth: int,
+        depths: SearchDepths,
     ) -> dict[str, Any]:
         nodes = list(self._iter_nodes(root))
         evaluations: list[dict[str, Any]] = []
@@ -655,7 +749,10 @@ class MCTSPlanner:
             "chosen_action_id": chosen_action_id,
             "search_p1_utterance": search_utterance,
             "simulations": simulation_count,
-            "max_rollout_depth": rollout_depth,
+            "max_rollout_depth": depths.max_rollout_depth,
+            "labyrinth_depth": depths.labyrinth_depth,
+            "lantern_range": depths.lantern_range,
+            "depth_mode": depths.depth_mode,
             "top_root_actions": [_compact_root_stat(item) for item in root_stats[:6]],
             "selected_branch": (
                 self._compact_node_for_reflection(selected_node) if selected_node else None
@@ -803,6 +900,7 @@ class MCTSPlanner:
             "rollout_trace": [
                 {
                     "depth": step.get("depth"),
+                    "rollout_offset": step.get("rollout_offset"),
                     "action_id": step.get("action_id"),
                     "candidate": self._compact_candidate_for_reflection(step.get("candidate")),
                     "p1_utterance": _clip(step.get("p1_utterance"), 120),
@@ -836,7 +934,7 @@ class MCTSPlanner:
         root: MCTSNode,
         chosen_action_id: str,
         simulation_count: int | None = None,
-        rollout_depth: int | None = None,
+        depths: SearchDepths | None = None,
         search_utterance: str | None = None,
         final_utterance: str | None = None,
         rollout_reflection: dict[str, Any] | None = None,
@@ -867,7 +965,16 @@ class MCTSPlanner:
             "final_p1_utterance": final_utterance,
             "rollout_reflection": rollout_reflection,
             "simulations": simulation_count or self.config.simulations,
-            "max_rollout_depth": rollout_depth or self.config.max_rollout_depth,
+            "max_rollout_depth": (
+                depths.max_rollout_depth if depths else self.config.max_rollout_depth
+            ),
+            "labyrinth_depth": (
+                depths.labyrinth_depth if depths else self.config.max_tree_depth or self.config.max_rollout_depth
+            ),
+            "lantern_range": (
+                depths.lantern_range if depths else self.config.rollout_extension_depth or 0
+            ),
+            "depth_mode": depths.depth_mode if depths else "legacy_absolute",
             "root_stats": self._root_stats(root),
             "search_stats": self.stats_store.compact(),
             "nodes": nodes,

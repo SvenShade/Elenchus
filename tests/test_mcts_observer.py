@@ -92,6 +92,74 @@ def test_mcts_plan_honors_depth_override():
     assert max(rollout_depths) == 3
 
 
+def test_split_depth_materializes_tree_then_extends_hidden_rollout():
+    config = GameConfig.model_validate(minimal_game_data())
+    env = TwoPlayerConversationEnv(config, ObserverLLM())
+    planner = MCTSPlanner(env)
+    events: list[dict[str, Any]] = []
+
+    planner.plan(
+        env.initial_state(),
+        simulations=4,
+        max_tree_depth=3,
+        rollout_extension_depth=2,
+        observer=events.append,
+    )
+
+    run_started = next(event for event in events if event["type"] == "run_started")
+    node_depths = [event["depth"] for event in events if event["type"] == "node_added"]
+    rollout_depths = [event["depth"] for event in events if event["type"] == "rollout_step"]
+    rollout_offsets = [event["rollout_offset"] for event in events if event["type"] == "rollout_step"]
+
+    assert run_started["depth_mode"] == "split"
+    assert run_started["labyrinth_depth"] == 3
+    assert run_started["lantern_range"] == 2
+    assert run_started["max_rollout_depth"] == 5
+    assert max(node_depths) == 3
+    assert max(rollout_depths) == 5
+    assert max(rollout_offsets) == 2
+
+
+def test_split_depth_can_evaluate_leaf_without_hidden_rollout():
+    config = GameConfig.model_validate(minimal_game_data())
+    env = TwoPlayerConversationEnv(config, ObserverLLM())
+    planner = MCTSPlanner(env)
+    events: list[dict[str, Any]] = []
+
+    planner.plan(
+        env.initial_state(),
+        simulations=1,
+        max_tree_depth=1,
+        rollout_extension_depth=0,
+        observer=events.append,
+    )
+
+    assert not [event for event in events if event["type"] == "rollout_step"]
+    evaluated = next(event for event in events if event["type"] == "node_evaluated")
+    assert evaluated["leaf_depth"] == 1
+    assert evaluated["rollout_extension_depth"] == 0
+
+
+def test_split_depth_keeps_tree_shallow_while_judging_hidden_future():
+    config = GameConfig.model_validate(minimal_game_data())
+    env = TwoPlayerConversationEnv(config, ObserverLLM())
+    planner = MCTSPlanner(env)
+    events: list[dict[str, Any]] = []
+
+    planner.plan(
+        env.initial_state(),
+        simulations=2,
+        max_tree_depth=1,
+        rollout_extension_depth=2,
+        observer=events.append,
+    )
+
+    node_depths = [event["depth"] for event in events if event["type"] == "node_added"]
+    rollout_depths = [event["depth"] for event in events if event["type"] == "rollout_step"]
+    assert max(node_depths) == 1
+    assert max(rollout_depths) == 3
+
+
 def test_mcts_rollout_reflection_finalizes_p1_without_rewriting_search_stats():
     data = minimal_game_data()
     data["prompts"]["rollout_reflection"] = "Reflect:\n{{rollout_evidence}}"

@@ -475,7 +475,12 @@ prompts:
 
 mcts:
   simulations: 8
+  # Legacy absolute horizon. If max_tree_depth/rollout_extension_depth are omitted,
+  # old callers use this for both explicit tree growth and rollout evaluation.
   max_rollout_depth: 2
+  # Optional split-depth controls:
+  # max_tree_depth: 2           # visible MCTS Chambers / explicit tree depth
+  # rollout_extension_depth: 1  # hidden rollout exchanges after a selected leaf
   c_puct: 1.5
   root_action_selection: visits
   random_seed: 0

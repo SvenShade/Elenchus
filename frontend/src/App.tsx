@@ -19,7 +19,8 @@ export function App() {
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [state, dispatch] = useReducer(graphReducer, initialGraphState);
   const [simulations, setSimulations] = useState(8);
-  const [maxRolloutDepth, setMaxRolloutDepth] = useState(2);
+  const [labyrinthDepth, setLabyrinthDepth] = useState(2);
+  const [lanternRange, setLanternRange] = useState(1);
   const [graphDetail, setGraphDetail] = useState(100);
   const [reflexion, setReflexion] = useState(false);
   const [p2Draft, setP2Draft] = useState("");
@@ -37,7 +38,8 @@ export function App() {
         if (cancelled) return;
         setSession(summary);
         setSimulations(summary.slider.default);
-        setMaxRolloutDepth(summary.depth_slider.default);
+        setLabyrinthDepth(summary.labyrinth_depth_slider?.default ?? summary.depth_slider.default);
+        setLanternRange(summary.lantern_range_slider?.default ?? 1);
         setReflexion(summary.reflexion.default);
         dispatch({ type: "transcript_updated", transcript: summary.transcript });
       })
@@ -94,7 +96,8 @@ export function App() {
     return state.selectedNodeId;
   }, [nodes, selectedNodeId, state.selectedNodeId]);
   const slider = session?.slider ?? { min: 1, max: 128, default: 8 };
-  const depthSlider = session?.depth_slider ?? { min: 1, max: 5, default: 2 };
+  const labyrinthDepthSlider = session?.labyrinth_depth_slider ?? { min: 1, max: 5, default: 2 };
+  const lanternRangeSlider = session?.lantern_range_slider ?? { min: 0, max: 5, default: 1 };
   const reflexionControl = session?.reflexion ?? { available: false, default: false };
   const pendingP2Turn = transcript.at(-1)?.speaker === "P2";
   const canUseComposer = Boolean(sessionId) && !state.planning && (p2Draft.trim().length > 0 || pendingP2Turn);
@@ -108,7 +111,13 @@ export function App() {
         const summary = await sendP2(sessionId, content);
         setSession(summary);
       }
-      await planP1(sessionId, simulations, maxRolloutDepth, reflexion && reflexionControl.available);
+      await planP1(
+        sessionId,
+        simulations,
+        labyrinthDepth,
+        lanternRange,
+        reflexion && reflexionControl.available
+      );
     } catch (error) {
       dispatch({
         type: "planning_failed",
@@ -120,7 +129,8 @@ export function App() {
     p2Draft,
     pendingP2Turn,
     simulations,
-    maxRolloutDepth,
+    labyrinthDepth,
+    lanternRange,
     reflexion,
     reflexionControl.available,
     state.planning
@@ -166,16 +176,28 @@ export function App() {
                   <strong>{simulations}</strong>
                 </label>
                 <label className="budget-control">
-                  <span>MCTS depth</span>
+                  <span>Labyrinth depth</span>
                   <input
-                    aria-label="MCTS rollout depth"
+                    aria-label="Labyrinth depth"
                     type="range"
-                    min={depthSlider.min}
-                    max={depthSlider.max}
-                    value={maxRolloutDepth}
-                    onChange={(event) => setMaxRolloutDepth(Number(event.target.value))}
+                    min={labyrinthDepthSlider.min}
+                    max={labyrinthDepthSlider.max}
+                    value={labyrinthDepth}
+                    onChange={(event) => setLabyrinthDepth(Number(event.target.value))}
                   />
-                  <strong>{maxRolloutDepth}</strong>
+                  <strong>{labyrinthDepth}</strong>
+                </label>
+                <label className="budget-control">
+                  <span>Lantern range</span>
+                  <input
+                    aria-label="Lantern range"
+                    type="range"
+                    min={lanternRangeSlider.min}
+                    max={lanternRangeSlider.max}
+                    value={lanternRange}
+                    onChange={(event) => setLanternRange(Number(event.target.value))}
+                  />
+                  <strong>{lanternRange}</strong>
                 </label>
                 <label className="budget-control">
                   <span>Graph detail</span>

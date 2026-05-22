@@ -87,6 +87,17 @@ def test_game_config_accepts_progressive_widening_config():
     assert widening.candidate_refresh_visits == [0, 3, 9]
 
 
+def test_game_config_accepts_optional_split_depth_config():
+    data = minimal_game_data()
+    data["mcts"]["max_tree_depth"] = 3
+    data["mcts"]["rollout_extension_depth"] = 2
+
+    config = GameConfig.model_validate(data)
+
+    assert config.mcts.max_tree_depth == 3
+    assert config.mcts.rollout_extension_depth == 2
+
+
 def test_game_config_accepts_optional_rollout_reflection_prompts():
     data = minimal_game_data()
     data["prompts"]["rollout_reflection"] = "Reflect on {{rollout_evidence}}"

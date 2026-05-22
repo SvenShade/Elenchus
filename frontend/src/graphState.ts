@@ -234,6 +234,13 @@ export type MCTSEvent = {
   transcript?: TranscriptTurn[];
   simulations?: number;
   max_rollout_depth?: number;
+  max_tree_depth?: number;
+  labyrinth_depth?: number;
+  rollout_extension_depth?: number;
+  lantern_range?: number;
+  depth_mode?: string;
+  rollout_offset?: number;
+  leaf_depth?: number;
   utility?: number;
   rubric?: unknown;
   rollout_trace?: unknown[];

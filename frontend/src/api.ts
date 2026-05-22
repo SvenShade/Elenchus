@@ -27,6 +27,16 @@ export type SessionSummary = {
     max: number;
     default: number;
   };
+  labyrinth_depth_slider: {
+    min: number;
+    max: number;
+    default: number;
+  };
+  lantern_range_slider: {
+    min: number;
+    max: number;
+    default: number;
+  };
   reflexion: {
     available: boolean;
     default: boolean;
@@ -60,12 +70,18 @@ export function getSession(sessionId: string): Promise<SessionSummary> {
 export function planP1(
   sessionId: string,
   simulations: number,
-  maxRolloutDepth: number,
+  labyrinthDepth: number,
+  lanternRange: number,
   reflexion: boolean
 ): Promise<{ status: string; run_id: string }> {
   return request(`/api/sessions/${sessionId}/plan`, {
     method: "POST",
-    body: JSON.stringify({ simulations, max_rollout_depth: maxRolloutDepth, reflexion })
+    body: JSON.stringify({
+      simulations,
+      labyrinth_depth: labyrinthDepth,
+      lantern_range: lanternRange,
+      reflexion
+    })
   });
 }
 

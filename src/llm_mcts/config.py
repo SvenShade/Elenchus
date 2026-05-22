@@ -86,6 +86,8 @@ class MCTSConfig(BaseModel):
 
     simulations: int = Field(default=16, ge=1)
     max_rollout_depth: int = Field(default=2, ge=1)
+    max_tree_depth: int | None = Field(default=None, ge=1)
+    rollout_extension_depth: int | None = Field(default=None, ge=0)
     c_puct: float = Field(default=1.5, ge=0.0)
     root_action_selection: Literal["visits", "value"] = "visits"
     random_seed: int = 0

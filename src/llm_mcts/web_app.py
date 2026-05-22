@@ -58,7 +58,11 @@ class CreateSessionResponse(BaseModel):
 
 class PlanRequest(BaseModel):
     simulations: int = Field(ge=1)
-    max_rollout_depth: int = Field(default=2, ge=1, le=5)
+    max_rollout_depth: int | None = Field(default=None, ge=1, le=5)
+    max_tree_depth: int | None = Field(default=None, ge=1, le=5)
+    labyrinth_depth: int | None = Field(default=None, ge=1, le=5)
+    rollout_extension_depth: int | None = Field(default=None, ge=0, le=5)
+    lantern_range: int | None = Field(default=None, ge=0, le=5)
     reflexion: bool = False
 
 
@@ -74,6 +78,10 @@ class WebRuntimeConfig:
     mock_llm: bool = False
     max_simulations: int = 128
     web_origin: str | None = None
+
+
+def _clamp_depth(value: int, minimum: int, maximum: int) -> int:
+    return min(max(minimum, int(value)), maximum)
 
 
 @dataclass
@@ -114,7 +122,27 @@ class SessionState:
             "depth_slider": {
                 "min": 1,
                 "max": 5,
-                "default": min(max(1, self.config.mcts.max_rollout_depth), 5),
+                "default": _clamp_depth(self.config.mcts.max_rollout_depth, 1, 5),
+            },
+            "labyrinth_depth_slider": {
+                "min": 1,
+                "max": 5,
+                "default": _clamp_depth(
+                    self.config.mcts.max_tree_depth or self.config.mcts.max_rollout_depth,
+                    1,
+                    5,
+                ),
+            },
+            "lantern_range_slider": {
+                "min": 0,
+                "max": 5,
+                "default": _clamp_depth(
+                    self.config.mcts.rollout_extension_depth
+                    if self.config.mcts.rollout_extension_depth is not None
+                    else 1,
+                    0,
+                    5,
+                ),
             },
             "reflexion": {
                 "available": bool(self.config.prompts.rollout_reflection),
@@ -204,7 +232,38 @@ def create_app(runtime: WebRuntimeConfig) -> FastAPI:
     async def plan(session_id: str, request: PlanRequest) -> dict[str, Any]:
         session = store.get(session_id)
         simulations = min(max(1, request.simulations), session.max_simulations)
-        max_rollout_depth = min(max(1, request.max_rollout_depth), 5)
+        legacy_depth_mode = (
+            request.max_rollout_depth is not None
+            and request.max_tree_depth is None
+            and request.labyrinth_depth is None
+            and request.rollout_extension_depth is None
+            and request.lantern_range is None
+        )
+        if legacy_depth_mode:
+            max_rollout_depth = _clamp_depth(request.max_rollout_depth or 2, 1, 5)
+            labyrinth_depth = max_rollout_depth
+            lantern_range = 0
+        else:
+            labyrinth_depth = _clamp_depth(
+                request.labyrinth_depth
+                or request.max_tree_depth
+                or session.config.mcts.max_tree_depth
+                or session.config.mcts.max_rollout_depth,
+                1,
+                5,
+            )
+            lantern_range = _clamp_depth(
+                request.lantern_range
+                if request.lantern_range is not None
+                else request.rollout_extension_depth
+                if request.rollout_extension_depth is not None
+                else session.config.mcts.rollout_extension_depth
+                if session.config.mcts.rollout_extension_depth is not None
+                else 1,
+                0,
+                5,
+            )
+            max_rollout_depth = labyrinth_depth + lantern_range
         run_id = str(uuid4())
         with session.mutex:
             if session.planning:
@@ -221,13 +280,26 @@ def create_app(runtime: WebRuntimeConfig) -> FastAPI:
                 run_id=run_id,
                 simulations=simulations,
                 max_rollout_depth=max_rollout_depth,
+                labyrinth_depth=labyrinth_depth,
+                lantern_range=lantern_range,
+                depth_mode="legacy_absolute" if legacy_depth_mode else "split",
                 reflexion=request.reflexion,
             ),
         )
         loop = asyncio.get_running_loop()
         threading.Thread(
             target=_run_plan_thread,
-            args=(session, simulations, max_rollout_depth, bool(request.reflexion), run_id, loop),
+            args=(
+                session,
+                simulations,
+                max_rollout_depth if legacy_depth_mode else None,
+                labyrinth_depth,
+                lantern_range,
+                legacy_depth_mode,
+                bool(request.reflexion),
+                run_id,
+                loop,
+            ),
             daemon=True,
         ).start()
         return {
@@ -235,6 +307,9 @@ def create_app(runtime: WebRuntimeConfig) -> FastAPI:
             "run_id": run_id,
             "simulations": simulations,
             "max_rollout_depth": max_rollout_depth,
+            "labyrinth_depth": labyrinth_depth,
+            "lantern_range": lantern_range,
+            "depth_mode": "legacy_absolute" if legacy_depth_mode else "split",
             "reflexion": bool(request.reflexion),
         }
 
@@ -288,7 +363,10 @@ def create_app(runtime: WebRuntimeConfig) -> FastAPI:
 def _run_plan_thread(
     session: SessionState,
     simulations: int,
-    max_rollout_depth: int,
+    max_rollout_depth: int | None,
+    labyrinth_depth: int,
+    lantern_range: int,
+    legacy_depth_mode: bool,
     reflexion: bool,
     run_id: str,
     loop: asyncio.AbstractEventLoop,
@@ -326,6 +404,8 @@ def _run_plan_thread(
             state_snapshot,
             simulations=simulations,
             max_rollout_depth=max_rollout_depth,
+            max_tree_depth=None if legacy_depth_mode else labyrinth_depth,
+            rollout_extension_depth=None if legacy_depth_mode else lantern_range,
             observer=observer,
             finalize=planned_passes == 1,
             cancel_event=session.cancel_event,
@@ -350,6 +430,8 @@ def _run_plan_thread(
                 state_snapshot,
                 simulations=simulations,
                 max_rollout_depth=max_rollout_depth,
+                max_tree_depth=None if legacy_depth_mode else labyrinth_depth,
+                rollout_extension_depth=None if legacy_depth_mode else lantern_range,
                 observer=observer,
                 finalize=True,
                 cancel_event=session.cancel_event,
