@@ -164,9 +164,9 @@ export function App() {
             <div className="fold-body">
               <div className="slider-stack">
                 <label className="budget-control">
-                  <span>Compute</span>
+                  <span>Deliberation</span>
                   <input
-                    aria-label="Compute per-move simulations"
+                    aria-label="Deliberation per move"
                     type="range"
                     min={slider.min}
                     max={slider.max}
