@@ -200,9 +200,9 @@ export function App() {
                   <strong>{lanternRange}</strong>
                 </label>
                 <label className="budget-control">
-                  <span>Graph detail</span>
+                  <span>Map detail</span>
                   <input
-                    aria-label="Graph detail"
+                    aria-label="Map detail"
                     type="range"
                     min={0}
                     max={100}
