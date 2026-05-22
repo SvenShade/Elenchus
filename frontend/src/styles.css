@@ -508,7 +508,8 @@ button:disabled {
 }
 
 .labyrinth-region.singularity-active .labyrinth-content,
-.labyrinth-region.singularity-active .labyrinth-label-layer {
+.labyrinth-region.singularity-active .labyrinth-label-layer,
+.labyrinth-region.singularity-active .labyrinth-wisp-layer {
   animation: labyrinth-collapse 1.25s ease-in forwards;
 }
 
@@ -555,7 +556,9 @@ button:disabled {
 }
 
 .chamber-visit-halo {
-  fill: rgba(110, 231, 255, 0.48);
+  fill: rgba(110, 231, 255, 0.42);
+  stroke: rgba(110, 231, 255, 0.18);
+  stroke-width: 10px;
   filter: url("#labyrinth-glow");
   pointer-events: none;
 }
@@ -688,11 +691,6 @@ button:disabled {
   animation: backup-wave 1.05s ease-out forwards;
 }
 
-.labyrinth-wisp-object {
-  overflow: visible;
-  pointer-events: none;
-}
-
 .labyrinth-wisp {
   width: 150px;
   min-height: 86px;
@@ -717,6 +715,20 @@ button:disabled {
 .labyrinth-label-layer {
   position: absolute;
   inset: 0;
+  pointer-events: none;
+  z-index: 2;
+}
+
+.labyrinth-wisp-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  pointer-events: none;
+}
+
+.labyrinth-wisp-anchor {
+  position: absolute;
+  transform: translate(-6px, -12px);
   pointer-events: none;
 }
 

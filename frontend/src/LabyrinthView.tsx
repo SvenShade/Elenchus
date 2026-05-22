@@ -311,6 +311,12 @@ export function LabyrinthView({
         labelDistances={labelDistances}
         onSelectNode={onSelectNode}
       />
+      <LabyrinthWispLayer
+        effects={visualEffects}
+        layout={layout}
+        viewBox={viewBox}
+        size={size}
+      />
     </div>
   );
 }
@@ -383,12 +389,10 @@ function LabyrinthChamber({
         if (event.key === "Enter" || event.key === " ") onSelectNode(node.id);
       }}
     >
-      <ellipse
+      <path
         className="chamber-visit-halo"
-        cx={node.x}
-        cy={node.y}
-        rx={node.chamberSize * 0.72 * visitHeat.scale}
-        ry={node.chamberSize * 0.56 * visitHeat.scale}
+        d={chamberPath(node, 1.18 * visitHeat.scale)}
+        vectorEffect="non-scaling-stroke"
         style={{ opacity: visitHeat.opacity }}
       />
       <path className="chamber-shape" d={chamberPath(node)} vectorEffect="non-scaling-stroke" />
@@ -485,11 +489,6 @@ function LabyrinthEffects({
           if (!node) return null;
           return <RouteRipple key={effect.id} node={node} utility={effect.utility} />;
         }
-        if (effect.type === "transcript_wisp") {
-          const node = layout.nodeMap.get(effect.node_id);
-          if (!node) return null;
-          return <LabyrinthWisp key={effect.id} node={node} text={effect.text} source={effect.source} />;
-        }
         if (effect.type === "ghost_door_flare") {
           const node = layout.nodeMap.get(effect.node_id);
           if (!node) return null;
@@ -569,30 +568,6 @@ function BackupWave({
   );
 }
 
-function LabyrinthWisp({
-  node,
-  text,
-  source
-}: {
-  node: LabyrinthNode;
-  text: string;
-  source: "node_added" | "rollout_step";
-}) {
-  return (
-    <foreignObject
-      className={`labyrinth-wisp-object ${source}`}
-      x={node.x + node.chamberSize * 0.3}
-      y={node.y - node.chamberSize * 1.05}
-      width="170"
-      height="104"
-    >
-      <div className={`labyrinth-wisp ${source}`}>
-        {text}
-      </div>
-    </foreignObject>
-  );
-}
-
 function LabyrinthLabels({
   layout,
   viewBox,
@@ -639,6 +614,61 @@ function LabyrinthLabels({
           </button>
         );
       })}
+    </div>
+  );
+}
+
+function LabyrinthWispLayer({
+  effects,
+  layout,
+  viewBox,
+  size
+}: {
+  effects: VisualEffect[];
+  layout: LabyrinthLayout;
+  viewBox: LabyrinthBounds;
+  size: { width: number; height: number };
+}) {
+  if (size.width === 0 || size.height === 0) return null;
+  const wisps = effects
+    .slice(-88)
+    .filter(
+      (effect): effect is Extract<VisualEffect, { type: "transcript_wisp" }> =>
+        effect.type === "transcript_wisp"
+    )
+    .map((effect) => {
+      const node = layout.nodeMap.get(effect.node_id);
+      if (!node) return null;
+      const position = worldToScreen(
+        node.x + node.chamberSize * 0.3,
+        node.y - node.chamberSize * 1.05,
+        viewBox,
+        size
+      );
+      return { effect, position };
+    })
+    .filter(
+      (
+        item
+      ): item is {
+        effect: Extract<VisualEffect, { type: "transcript_wisp" }>;
+        position: { x: number; y: number };
+      } => Boolean(item)
+    );
+  if (wisps.length === 0) return null;
+  return (
+    <div className="labyrinth-wisp-layer" aria-hidden="true">
+      {wisps.map(({ effect, position }) => (
+        <div
+          key={effect.id}
+          className="labyrinth-wisp-anchor"
+          style={{ left: position.x, top: position.y }}
+        >
+          <div className={`labyrinth-wisp ${effect.source}`}>
+            {effect.text}
+          </div>
+        </div>
+      ))}
     </div>
   );
 }
@@ -718,9 +748,9 @@ function upstreamFocusNode(
   return selected;
 }
 
-function chamberPath(node: LabyrinthNode): string {
-  const width = node.chamberSize * (node.id === 0 ? 1.12 : 1);
-  const height = node.chamberSize * 0.9;
+function chamberPath(node: LabyrinthNode, scale = 1): string {
+  const width = node.chamberSize * 0.75 * (node.id === 0 ? 1.12 : 1) * scale;
+  const height = node.chamberSize * 0.9 * scale;
   const x = node.x - width / 2;
   const y = node.y - height / 2;
   return [

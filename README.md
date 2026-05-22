@@ -1,6 +1,6 @@
 # Elenchus
 
-**Elenchus, Lantern of Latent Labyrinths v0.1** is an experimental
+**Elenchus, Lantern of Latent Labyrinths** is an experimental
 LLM-plus-MCTS system for dialectic self-exploration.
 
 Underneath every conversation lies an unspoken labyrinth. Elenchus enters these
